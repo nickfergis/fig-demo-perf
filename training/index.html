@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Training Platform Demo</title>
+<style>
+  :root {
+    --bg: #F5F7FB; --ink: #14213D; --muted: #56627F; --accent: #B8520A;
+    --overlay: rgba(9, 15, 30, 0.97); --panel: #111A2E; --panel-ink: #E8ECF5; --line: #2A3653;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font-family: Inter, "Segoe UI", "Liberation Sans", Arial, sans-serif; overflow: hidden; }
+  #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #diagram { width: 100vw; height: 100vh; max-width: calc(100vh * 16 / 9); max-height: calc(100vw * 9 / 16); }
+
+  .box { cursor: pointer; transition: opacity .25s, filter .25s; outline: none; }
+  .box:hover, .box:focus-visible { filter: drop-shadow(0 6px 14px rgba(20, 33, 61, .22)); }
+  .box.demo:hover { filter: drop-shadow(0 8px 18px rgba(184, 82, 10, .35)); }
+  body.spot .box:not(.on) { opacity: .35; }
+  .box.on { filter: drop-shadow(0 0 0 #fff) drop-shadow(0 0 12px rgba(31, 58, 110, .55)); }
+
+  #hint { position: fixed; left: 16px; bottom: 12px; font-size: 13px; color: var(--muted);
+    background: rgba(255,255,255,.85); border: 1px solid #D5DBE8; border-radius: 8px; padding: 6px 10px; }
+  #hint.hidden { display: none; }
+  kbd { font: inherit; font-weight: 700; padding: 0 5px; border: 1px solid #C7CEDD; border-radius: 4px; background: #fff; }
+
+  #player { position: fixed; inset: 0; background: var(--overlay); display: none; z-index: 10; }
+  #player.open { display: flex; }
+  #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: var(--panel-ink); }
+  #bar h2 { margin: 0; font-size: 18px; font-weight: 700; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .btn { background: transparent; color: var(--panel-ink); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+  .btn:hover { border-color: #5B6B90; }
+  .btn.sel { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #close { font-size: 16px; padding: 6px 14px; }
+  #vwrap { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 0 16px 16px; }
+  video { max-width: 100%; max-height: 100%; background: #000; border-radius: 6px; }
+  #pending { color: var(--panel-ink); text-align: center; font-size: 22px; line-height: 1.5; display: none; }
+  #pending small { display: block; color: #9AA6C2; font-size: 15px; margin-top: 8px; }
+
+  #chap { width: 300px; background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; display: none; }
+  #player.chapters #chap { display: block; }
+  #chap h3 { margin: 0; padding: 14px 16px 8px; color: #9AA6C2; font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; }
+  #chap button { display: flex; gap: 12px; width: 100%; text-align: left; background: none; border: 0;
+    color: var(--panel-ink); padding: 8px 16px; font: inherit; font-size: 14px; cursor: pointer; }
+  #chap button:hover { background: #1A2540; }
+  #chap button.now { background: #22304F; box-shadow: inset 3px 0 0 var(--accent); }
+  #chap .t { color: #9AA6C2; font-variant-numeric: tabular-nums; min-width: 42px; }
+</style>
+</head>
+<body>
+<div id="stage"><svg id="diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" font-family="Inter, 'Segoe UI', 'Liberation Sans', Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">The eight-part training platform: source content in, measured performance out</title>
+<desc id="d">Flow diagram. Step 1 training source content feeds step 2 a source-to-video-script pipeline, which feeds step 3 AI training videos and step 4 a private vector database. Videos feed step 8 the LMS and the vector database feeds step 5 the live avatar. The LMS and step 7 the ServiceTitan integration feed step 6 the performance dashboard, which loops back to decide what content to build next. A side rail lists extensions. A bottom strip shows reference outcomes.</desc>
+<defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#56627F"/></marker></defs>
+<rect x="0" y="0" width="1920" height="1080" rx="0" fill="#F5F7FB"/>
+<text x="70" y="92" font-size="44" font-weight="800" fill="#14213D" text-anchor="start" letter-spacing="0">Source content in. Measured performance out.</text>
+<text x="70" y="132" font-size="24" font-weight="500" fill="#56627F" text-anchor="start" letter-spacing="0">The eight-part training platform we would build for you</text>
+<path d="M320 465 H374" fill="none" stroke="#56627F" stroke-width="2.5" marker-end="url(#ah)"/>
+<path d="M630 465 H660 V340 H684" fill="none" stroke="#56627F" stroke-width="2.5" marker-end="url(#ah)"/>
+<path d="M660 465 V590 H684" fill="none" stroke="#56627F" stroke-width="2.5" marker-end="url(#ah)"/>
+<path d="M940 340 H994" fill="none" stroke="#56627F" stroke-width="2.5" marker-end="url(#ah)"/>
+<path d="M940 590 H994" fill="none" stroke="#56627F" stroke-width="2.5" marker-end="url(#ah)"/>
+<path d="M1250 340 H1304" fill="none" stroke="#56627F" stroke-width="2.5" marker-end="url(#ah)"/>
+<path d="M1435 500 V436" fill="none" stroke="#56627F" stroke-width="2.5" marker-end="url(#ah)"/>
+<path d="M1435 250 V215 H195 V369" fill="none" stroke="#6B4BB8" stroke-width="3"/>
+<path d="M188 361L195 373L202 361z" fill="#6B4BB8"/>
+<text x="700" y="200" font-size="16" font-weight="700" fill="#6B4BB8" text-anchor="middle" letter-spacing="0.8">CLOSED LOOP  ·  what the dashboard shows decides what to train and build next</text>
+<g class="box" data-box="1" tabindex="0" role="button" aria-label="Training Source Content">
+<rect x="70" y="375" width="250" height="180" rx="12" fill="#fff" stroke="#D5DBE8" stroke-width="1.5"/>
+<path d="M70 387a12 12 0 0 1 12 -12h6v180h-6a12 12 0 0 1 -12 -12z" fill="#1F3A6E"/>
+<circle cx="110" cy="409" r="17" fill="#1F3A6E"/>
+<text x="110" y="415" font-size="19" font-weight="800" fill="#fff" text-anchor="middle" letter-spacing="0">1</text>
+<text x="94" y="453" font-size="20" font-weight="700" fill="#14213D" text-anchor="start" letter-spacing="0">Training Source</text>
+<text x="94" y="477" font-size="20" font-weight="700" fill="#14213D" text-anchor="start" letter-spacing="0">Content</text>
+<text x="94" y="509" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">Expert sessions, decks,</text>
+<text x="94" y="528" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">playbooks and field</text>
+<text x="94" y="547" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">recordings.</text>
+</g>
+<g class="box" data-box="2" tabindex="0" role="button" aria-label="Source-to-Video-Script Pipeline">
+<rect x="380" y="375" width="250" height="180" rx="12" fill="#fff" stroke="#D5DBE8" stroke-width="1.5"/>
+<path d="M380 387a12 12 0 0 1 12 -12h6v180h-6a12 12 0 0 1 -12 -12z" fill="#1F3A6E"/>
+<circle cx="420" cy="409" r="17" fill="#1F3A6E"/>
+<text x="420" y="415" font-size="19" font-weight="800" fill="#fff" text-anchor="middle" letter-spacing="0">2</text>
+<text x="404" y="453" font-size="20" font-weight="700" fill="#14213D" text-anchor="start" letter-spacing="0">Source-to-Video-</text>
+<text x="404" y="477" font-size="20" font-weight="700" fill="#14213D" text-anchor="start" letter-spacing="0">Script Pipeline</text>
+<text x="404" y="509" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">Code-driven pipeline turns</text>
+<text x="404" y="528" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">source into structured, QC-</text>
+<text x="404" y="547" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">checked scripts.</text>
+</g>
+<g class="box demo" data-box="3" tabindex="0" role="button" aria-label="AI Training Videos">
+<rect x="690" y="250" width="250" height="180" rx="12" fill="#fff" stroke="#D5DBE8" stroke-width="1.5"/>
+<path d="M690 262a12 12 0 0 1 12 -12h6v180h-6a12 12 0 0 1 -12 -12z" fill="#1F3A6E"/>
+<circle cx="730" cy="284" r="17" fill="#1F3A6E"/>
+<text x="730" y="290" font-size="19" font-weight="800" fill="#fff" text-anchor="middle" letter-spacing="0">3</text>
+<text x="714" y="328" font-size="20" font-weight="700" fill="#14213D" text-anchor="start" letter-spacing="0">AI Training Videos</text>
+<text x="714" y="360" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">Multi-agent AI hosts act</text>
+<text x="714" y="379" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">out real field scenarios.</text>
+<rect x="844" y="236" width="88" height="28" rx="14" fill="#B8520A"/>
+<text x="888" y="255" font-size="13" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="1">▶  DEMO</text>
+</g>
+<g class="box" data-box="4" tabindex="0" role="button" aria-label="Private Vector Database">
+<rect x="690" y="500" width="250" height="180" rx="12" fill="#fff" stroke="#D5DBE8" stroke-width="1.5"/>
+<path d="M690 512a12 12 0 0 1 12 -12h6v180h-6a12 12 0 0 1 -12 -12z" fill="#1F3A6E"/>
+<circle cx="730" cy="534" r="17" fill="#1F3A6E"/>
+<text x="730" y="540" font-size="19" font-weight="800" fill="#fff" text-anchor="middle" letter-spacing="0">4</text>
+<text x="714" y="578" font-size="20" font-weight="700" fill="#14213D" text-anchor="start" letter-spacing="0">Private Vector</text>
+<text x="714" y="602" font-size="20" font-weight="700" fill="#14213D" text-anchor="start" letter-spacing="0">Database</text>
+<text x="714" y="634" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">Scripts and FAQs tagged and</text>
+<text x="714" y="653" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">indexed as your own</text>
+<text x="714" y="672" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">knowledge base.</text>
+</g>
+<g class="box demo" data-box="8" tabindex="0" role="button" aria-label="Learning Management System">
+<rect x="1000" y="250" width="250" height="180" rx="12" fill="#fff" stroke="#D5DBE8" stroke-width="1.5"/>
+<path d="M1000 262a12 12 0 0 1 12 -12h6v180h-6a12 12 0 0 1 -12 -12z" fill="#0B7F75"/>
+<circle cx="1040" cy="284" r="17" fill="#0B7F75"/>
+<text x="1040" y="290" font-size="19" font-weight="800" fill="#fff" text-anchor="middle" letter-spacing="0">8</text>
+<text x="1024" y="328" font-size="20" font-weight="700" fill="#14213D" text-anchor="start" letter-spacing="0">Learning</text>
+<text x="1024" y="352" font-size="20" font-weight="700" fill="#14213D" text-anchor="start" letter-spacing="0">Management System</text>
+<text x="1024" y="384" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">Self-paced paths, graded</text>
+<text x="1024" y="403" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">assessments, completion</text>
+<text x="1024" y="422" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">tracking.</text>
+<rect x="1154" y="236" width="88" height="28" rx="14" fill="#B8520A"/>
+<text x="1198" y="255" font-size="13" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="1">▶  DEMO</text>
+</g>
+<g class="box demo" data-box="5" tabindex="0" role="button" aria-label="Live Avatar">
+<rect x="1000" y="500" width="250" height="180" rx="12" fill="#fff" stroke="#D5DBE8" stroke-width="1.5"/>
+<path d="M1000 512a12 12 0 0 1 12 -12h6v180h-6a12 12 0 0 1 -12 -12z" fill="#0B7F75"/>
+<circle cx="1040" cy="534" r="17" fill="#0B7F75"/>
+<text x="1040" y="540" font-size="19" font-weight="800" fill="#fff" text-anchor="middle" letter-spacing="0">5</text>
+<text x="1024" y="578" font-size="20" font-weight="700" fill="#14213D" text-anchor="start" letter-spacing="0">Live Avatar</text>
+<text x="1024" y="610" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">Ask by video, voice or</text>
+<text x="1024" y="629" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">text; answers grounded in</text>
+<text x="1024" y="648" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">your training.</text>
+<rect x="1154" y="486" width="88" height="28" rx="14" fill="#B8520A"/>
+<text x="1198" y="505" font-size="13" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="1">▶  DEMO</text>
+</g>
+<g class="box demo" data-box="6" tabindex="0" role="button" aria-label="Performance Dashboard (PMD)">
+<rect x="1310" y="250" width="250" height="180" rx="12" fill="#fff" stroke="#D5DBE8" stroke-width="1.5"/>
+<path d="M1310 262a12 12 0 0 1 12 -12h6v180h-6a12 12 0 0 1 -12 -12z" fill="#6B4BB8"/>
+<circle cx="1350" cy="284" r="17" fill="#6B4BB8"/>
+<text x="1350" y="290" font-size="19" font-weight="800" fill="#fff" text-anchor="middle" letter-spacing="0">6</text>
+<text x="1334" y="328" font-size="20" font-weight="700" fill="#14213D" text-anchor="start" letter-spacing="0">Performance</text>
+<text x="1334" y="352" font-size="20" font-weight="700" fill="#14213D" text-anchor="start" letter-spacing="0">Dashboard (PMD)</text>
+<text x="1334" y="384" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">KPIs vs goals by tech, team</text>
+<text x="1334" y="403" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">and company, tied to</text>
+<text x="1334" y="422" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">training results.</text>
+<rect x="1464" y="236" width="88" height="28" rx="14" fill="#B8520A"/>
+<text x="1508" y="255" font-size="13" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="1">▶  DEMO</text>
+</g>
+<g class="box" data-box="7" tabindex="0" role="button" aria-label="ServiceTitan Integration">
+<rect x="1310" y="500" width="250" height="180" rx="12" fill="#fff" stroke="#D5DBE8" stroke-width="1.5"/>
+<path d="M1310 512a12 12 0 0 1 12 -12h6v180h-6a12 12 0 0 1 -12 -12z" fill="#6B4BB8"/>
+<circle cx="1350" cy="534" r="17" fill="#6B4BB8"/>
+<text x="1350" y="540" font-size="19" font-weight="800" fill="#fff" text-anchor="middle" letter-spacing="0">7</text>
+<text x="1334" y="578" font-size="20" font-weight="700" fill="#14213D" text-anchor="start" letter-spacing="0">ServiceTitan</text>
+<text x="1334" y="602" font-size="20" font-weight="700" fill="#14213D" text-anchor="start" letter-spacing="0">Integration</text>
+<text x="1334" y="634" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">Real-time job and revenue</text>
+<text x="1334" y="653" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">data, flowing in</text>
+<text x="1334" y="672" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">automatically.</text>
+</g>
+<path d="M70 712 V722 H940 V712" fill="none" stroke="#1F3A6E" stroke-width="2"/>
+<text x="505" y="752" font-size="16" font-weight="800" fill="#1F3A6E" text-anchor="middle" letter-spacing="1.2">BUILD THE CONTENT ENGINE</text>
+<path d="M1000 712 V722 H1250 V712" fill="none" stroke="#0B7F75" stroke-width="2"/>
+<text x="1125" y="752" font-size="16" font-weight="800" fill="#0B7F75" text-anchor="middle" letter-spacing="1.2">DELIVER</text>
+<path d="M1310 712 V722 H1560 V712" fill="none" stroke="#6B4BB8" stroke-width="2"/>
+<text x="1435" y="752" font-size="16" font-weight="800" fill="#6B4BB8" text-anchor="middle" letter-spacing="1.2">MEASURE</text>
+<path d="M1596 236V740" stroke="#D5DBE8" stroke-width="2" stroke-dasharray="2 6"/>
+<text x="1625" y="258" font-size="16" font-weight="800" fill="#7C8AA8" text-anchor="start" letter-spacing="1.5">EXTEND</text>
+<rect x="1625" y="286" width="225" height="100" rx="10" fill="#fff" stroke="#7C8AA8" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="1641" y="320" font-size="16" font-weight="600" fill="#14213D" text-anchor="start" letter-spacing="0">Interactive AI Resource</text>
+<text x="1641" y="342" font-size="16" font-weight="600" fill="#14213D" text-anchor="start" letter-spacing="0">Library / Knowledgebase</text>
+<rect x="1625" y="398" width="225" height="100" rx="10" fill="#fff" stroke="#7C8AA8" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="1641" y="432" font-size="16" font-weight="600" fill="#14213D" text-anchor="start" letter-spacing="0">Interactive Training /</text>
+<text x="1641" y="454" font-size="16" font-weight="600" fill="#14213D" text-anchor="start" letter-spacing="0">Practice and Role Play</text>
+<rect x="1625" y="510" width="225" height="100" rx="10" fill="#fff" stroke="#7C8AA8" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="1641" y="544" font-size="16" font-weight="600" fill="#14213D" text-anchor="start" letter-spacing="0">AI coaching on recorded</text>
+<text x="1641" y="566" font-size="16" font-weight="600" fill="#14213D" text-anchor="start" letter-spacing="0">sales calls: build or</text>
+<text x="1641" y="588" font-size="16" font-weight="600" fill="#14213D" text-anchor="start" letter-spacing="0">integrate</text>
+<rect x="1625" y="622" width="225" height="100" rx="10" fill="#fff" stroke="#7C8AA8" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="1641" y="656" font-size="16" font-weight="600" fill="#14213D" text-anchor="start" letter-spacing="0">More CRMs</text>
+<text x="70" y="812" font-size="15" font-weight="800" fill="#56627F" text-anchor="start" letter-spacing="1.5">REFERENCE OUTCOMES</text>
+<text x="300" y="812" font-size="15" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">SBE platform used with SBE coaches. Figures as stated in the SBE sales deck (Apr 2026).</text>
+<rect x="70" y="830" width="340" height="135" rx="12" fill="#fff" stroke="#D5DBE8" stroke-width="1.5"/>
+<text x="94" y="885" font-size="38" font-weight="800" fill="#14213D" text-anchor="start" letter-spacing="0">$325 → $618</text>
+<text x="94" y="917" font-size="17" font-weight="600" fill="#14213D" text-anchor="start" letter-spacing="0">Demand-service average ticket</text>
+<text x="94" y="945" font-size="14" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">16-location PE platform, 24 months</text>
+<rect x="430" y="830" width="340" height="135" rx="12" fill="#fff" stroke="#D5DBE8" stroke-width="1.5"/>
+<text x="454" y="885" font-size="38" font-weight="800" fill="#14213D" text-anchor="start" letter-spacing="0">$155 → $360</text>
+<text x="454" y="917" font-size="17" font-weight="600" fill="#14213D" text-anchor="start" letter-spacing="0">Maintenance average ticket</text>
+<text x="454" y="945" font-size="14" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">16-location PE platform, 24 months</text>
+<rect x="790" y="830" width="340" height="135" rx="12" fill="#fff" stroke="#D5DBE8" stroke-width="1.5"/>
+<text x="814" y="885" font-size="38" font-weight="800" fill="#14213D" text-anchor="start" letter-spacing="0">51% → 74%</text>
+<text x="814" y="917" font-size="17" font-weight="600" fill="#14213D" text-anchor="start" letter-spacing="0">Tech-generated lead close rate</text>
+<text x="814" y="945" font-size="14" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">16-location PE platform, 24 months</text>
+<rect x="1150" y="830" width="340" height="135" rx="12" fill="#fff" stroke="#D5DBE8" stroke-width="1.5"/>
+<text x="1174" y="885" font-size="38" font-weight="800" fill="#14213D" text-anchor="start" letter-spacing="0">$498K vs $28K</text>
+<text x="1174" y="917" font-size="17" font-weight="600" fill="#14213D" text-anchor="start" letter-spacing="0">60-day revenue gain, A vs C scorers</text>
+<text x="1174" y="945" font-size="14" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">47 techs, 4 companies, 60 days</text>
+<rect x="1510" y="830" width="340" height="135" rx="12" fill="#fff" stroke="#D5DBE8" stroke-width="1.5"/>
+<text x="1534" y="885" font-size="38" font-weight="800" fill="#14213D" text-anchor="start" letter-spacing="0">23%</text>
+<text x="1534" y="917" font-size="17" font-weight="600" fill="#14213D" text-anchor="start" letter-spacing="0">Average YoY revenue growth</text>
+<text x="1534" y="945" font-size="14" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">1,077 trained technicians, thru 12/2025</text>
+<text x="70" y="1020" font-size="15" font-weight="700" fill="#56627F" text-anchor="start" letter-spacing="0">Service Business Evolution</text>
+</svg></div>
+<div id="hint">Click a <b style="color:var(--accent)">DEMO</b> box to play it, or any box to spotlight it.
+  <kbd>3</kbd> <kbd>5</kbd> <kbd>6</kbd> <kbd>8</kbd> open demos, <kbd>F</kbd> full screen, <kbd>H</kbd> hides this.</div>
+
+<div id="player" role="dialog" aria-modal="true" aria-labelledby="ptitle">
+  <div id="main">
+    <div id="bar">
+      <h2 id="ptitle"></h2>
+      <span id="spdlabel" style="color:#9AA6C2;font-size:13px">Speed</span>
+      <button class="btn spd" data-r="1">1x</button>
+      <button class="btn spd" data-r="1.25">1.25x</button>
+      <button class="btn spd" data-r="1.5">1.5x</button>
+      <button class="btn" id="chapbtn">Chapters</button>
+      <button class="btn" id="close" aria-label="Close">Close &#x2715;</button>
+    </div>
+    <div id="vwrap">
+      <video id="vid" controls preload="metadata"></video>
+      <div id="pending"></div>
+    </div>
+  </div>
+  <aside id="chap"><h3>Chapters</h3><div id="chaplist"></div></aside>
+</div>
+
+<script>
+/* Which video each DEMO box plays. Paths are relative to this page, so the page and the videos
+   folder travel together and work offline. "start" is where that box begins inside the file. */
+const DEMOS = {
+ "6": {
+  "title": "Performance Dashboard (PMD)",
+  "src": "videos/PMD Demo.mp4",
+  "start": 0,
+  "rate": 1.25,
+  "chapters": [
+   [
+    0,
+    "Title"
+   ],
+   [
+    6,
+    "Command Center"
+   ],
+   [
+    13,
+    "Goal Performance"
+   ],
+   [
+    49,
+    "Set Goals: Manually"
+   ],
+   [
+    88,
+    "Set Goals: Wizard, Company and Department"
+   ],
+   [
+    186,
+    "Set Goals: Off-Track Goals"
+   ],
+   [
+    214,
+    "Set Goals: Wizard, Employees"
+   ],
+   [
+    266,
+    "Job Performance"
+   ],
+   [
+    357,
+    "Job Performance: Details"
+   ],
+   [
+    400,
+    "Job Performance: Charts"
+   ],
+   [
+    445,
+    "Training Analytics"
+   ],
+   [
+    566,
+    "Employee Analytics"
+   ],
+   [
+    661,
+    "Product Analytics"
+   ],
+   [
+    706,
+    "Awards"
+   ],
+   [
+    720,
+    "Take Action"
+   ],
+   [
+    850,
+    "Job Entry"
+   ],
+   [
+    881,
+    "SBE Rankings"
+   ],
+   [
+    921,
+    "Messages"
+   ],
+   [
+    927,
+    "Admin"
+   ],
+   [
+    931,
+    "Admin: Contractor Setup"
+   ],
+   [
+    975,
+    "Admin (continued)"
+   ]
+  ]
+ },
+ "8": {
+  "title": "Learning Management System and AI Video Training",
+  "src": "videos/LMS Demo.mp4",
+  "start": 0,
+  "rate": 1,
+  "chapters": [
+   [
+    0,
+    "Title"
+   ],
+   [
+    5.4,
+    "Learning Management System"
+   ],
+   [
+    28.1,
+    "AI Training Video: TT 2.4.2"
+   ],
+   [
+    237.8,
+    "Knowledge Check"
+   ],
+   [
+    268.1,
+    "AI Training Video: TT 2.3.2 Pre-Call"
+   ],
+   [
+    363.6,
+    "Course List"
+   ],
+   [
+    396.8,
+    "Thank you"
+   ]
+  ]
+ },
+ "3": {
+  "title": "AI Training Videos",
+  "src": "videos/LMS Demo.mp4",
+  "start": 28.1,
+  "rate": 1,
+  "chapters": [
+   [
+    0,
+    "Title"
+   ],
+   [
+    5.4,
+    "Learning Management System"
+   ],
+   [
+    28.1,
+    "AI Training Video: TT 2.4.2"
+   ],
+   [
+    237.8,
+    "Knowledge Check"
+   ],
+   [
+    268.1,
+    "AI Training Video: TT 2.3.2 Pre-Call"
+   ],
+   [
+    363.6,
+    "Course List"
+   ],
+   [
+    396.8,
+    "Thank you"
+   ]
+  ]
+ },
+ "5": {
+  "title": "Live Avatar AI Coach",
+  "src": "videos/Avatar Demo.mp4",
+  "start": 0,
+  "rate": 1,
+  "chapters": [
+   [
+    0,
+    "Title"
+   ],
+   [
+    5.4,
+    "Coach Patty: starting a session"
+   ],
+   [
+    26.4,
+    "Coach Patty: questions"
+   ],
+   [
+    110.6,
+    "Coach Tanya: starting a session"
+   ],
+   [
+    120.4,
+    "Coach Tanya: questions"
+   ],
+   [
+    221.3,
+    "Coach Tanya: pricing"
+   ],
+   [
+    305.2,
+    "Thank you"
+   ]
+  ]
+ }
+};
+
+const player = document.getElementById("player"), vid = document.getElementById("vid");
+const pending = document.getElementById("pending"), list = document.getElementById("chaplist");
+let current = null, rate = 1, pendingGo = null;
+
+function fmt(s) { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+
+function setRate(r) {
+  rate = r; vid.playbackRate = r;
+  document.querySelectorAll(".spd").forEach(b => b.classList.toggle("sel", +b.dataset.r === r));
+}
+
+function openDemo(id) {
+  const d = DEMOS[id]; if (!d) return;
+  current = d;
+  document.getElementById("ptitle").textContent = d.title;
+  list.innerHTML = "";
+  (d.chapters || []).forEach(c => {
+    const b = document.createElement("button");
+    b.innerHTML = '<span class="t">' + fmt(c[0]) + "</span><span>" + c[1] + "</span>";
+    b.onclick = () => { vid.currentTime = c[0]; vid.play(); };
+    b.dataset.t = c[0]; list.appendChild(b);
+  });
+  document.getElementById("chapbtn").style.display = (d.chapters || []).length ? "" : "none";
+  document.querySelectorAll(".spd, #spdlabel").forEach(el => el.style.display = d.pending ? "none" : "");
+  player.classList.add("open");
+  if (d.pending) {
+    vid.style.display = "none"; pending.style.display = "block";
+    pending.innerHTML = d.title + " video is being produced.<small>" + (d.note || "") + "</small>";
+    return;
+  }
+  vid.style.display = ""; pending.style.display = "none";
+  if (vid.dataset.src !== d.src) { vid.src = d.src; vid.dataset.src = d.src; }
+  const go = () => { vid.currentTime = d.start || 0; setRate(d.rate || 1); vid.play(); };
+  if (pendingGo) vid.removeEventListener("loadedmetadata", pendingGo);
+  pendingGo = null;
+  if (vid.readyState >= 1) go();
+  else { pendingGo = go; vid.addEventListener("loadedmetadata", go, { once: true }); }
+  vid.focus();
+}
+
+function closeDemo() { vid.pause(); player.classList.remove("open", "chapters"); current = null; }
+
+vid.addEventListener("timeupdate", () => {
+  const t = vid.currentTime; let now = null;
+  list.querySelectorAll("button").forEach(b => { if (+b.dataset.t <= t + 0.2) now = b; b.classList.remove("now"); });
+  if (now) now.classList.add("now");
+});
+
+document.querySelectorAll(".box").forEach(g => {
+  const id = g.dataset.box;
+  const act = () => {
+    if (g.classList.contains("demo") && DEMOS[id]) { openDemo(id); return; }
+    const was = g.classList.contains("on");
+    document.querySelectorAll(".box.on").forEach(x => x.classList.remove("on"));
+    document.body.classList.toggle("spot", !was);
+    if (!was) g.classList.add("on");
+  };
+  g.addEventListener("click", e => { e.stopPropagation(); act(); });
+  g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); act(); } });
+});
+document.getElementById("stage").addEventListener("click", () => {
+  document.querySelectorAll(".box.on").forEach(x => x.classList.remove("on"));
+  document.body.classList.remove("spot");
+});
+document.getElementById("close").onclick = closeDemo;
+document.getElementById("chapbtn").onclick = () => player.classList.toggle("chapters");
+document.querySelectorAll(".spd").forEach(b => b.onclick = () => setRate(+b.dataset.r));
+
+document.addEventListener("keydown", e => {
+  if (player.classList.contains("open")) {
+    if (e.key === "Escape") closeDemo();
+    else if (e.key.toLowerCase() === "c" && (current.chapters || []).length) player.classList.toggle("chapters");
+    return;
+  }
+  if (DEMOS[e.key]) openDemo(e.key);
+  else if (e.key.toLowerCase() === "f") {
+    if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen();
+  } else if (e.key.toLowerCase() === "h") document.getElementById("hint").classList.toggle("hidden");
+  else if (e.key === "Escape") document.getElementById("stage").click();
+});
+</script>
+</body>
+</html>
