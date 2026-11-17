@@ -49,6 +49,45 @@
   #chap button:hover { background: #1A2540; }
   #chap button.now { background: #22304F; box-shadow: inset 3px 0 0 var(--accent); }
   #chap .t { color: #9AA6C2; font-variant-numeric: tabular-nums; min-width: 42px; }
+  /* Phone layout (MT-175): below about 700px wide, or on a short landscape phone, the 16:9 diagram
+     shrinks to an unreadable size, so the same boxes are shown as one stacked column instead.
+     Desktop and tablet keep the diagram unchanged. */
+  #stack { display: none; }
+  @media (max-width: 700px), (max-height: 500px) {
+    html, body { height: auto; overflow: auto; }
+    #stage, #hint { display: none; }
+    #stack { display: block; max-width: 560px; margin: 0 auto; padding: 20px 16px 32px; }
+    #stack h1 { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 800; }
+    #stack .sub { margin: 6px 0 4px; font-size: 16px; color: var(--muted); font-weight: 500; }
+    #stack .tip { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+    #stack h2 { margin: 22px 0 8px; font-size: 13px; letter-spacing: 1.2px; font-weight: 800; }
+    #stack .card { position: relative; display: flex; gap: 12px; width: 100%; text-align: left; margin: 0 0 10px;
+      padding: 14px 14px 14px 16px; background: #fff; border: 1px solid #D5DBE8; border-left-width: 6px;
+      border-radius: 12px; font: inherit; color: var(--ink); }
+    #stack button.card { cursor: pointer; }
+    #stack button.card:active { filter: drop-shadow(0 4px 10px rgba(184, 82, 10, .3)); }
+    #stack .num { flex: none; width: 30px; height: 30px; border-radius: 50%; color: #fff; font-weight: 800;
+      font-size: 16px; display: flex; align-items: center; justify-content: center; }
+    #stack .ttl { font-size: 18px; font-weight: 700; line-height: 1.25; }
+    #stack .dsc { margin-top: 4px; font-size: 15px; line-height: 1.4; color: var(--muted); }
+    #stack .pill { display: inline-block; margin-top: 8px; background: var(--accent); color: #fff; border-radius: 14px;
+      padding: 4px 12px; font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+    #stack .loop { margin: 4px 0 0; padding: 10px 12px; border-radius: 10px; background: #EFEAF8; color: #6B4BB8;
+      font-size: 14px; font-weight: 700; line-height: 1.4; }
+    #stack .ext { margin: 0 0 8px; padding: 10px 12px; background: #fff; border: 1.5px dashed #7C8AA8; border-radius: 10px;
+      font-size: 15px; font-weight: 600; }
+    #stack .ref { margin: 0 0 10px; font-size: 14px; color: var(--muted); line-height: 1.4; }
+    #stack .out { margin: 0 0 10px; padding: 12px 14px; background: #fff; border: 1px solid #D5DBE8; border-radius: 12px; }
+    #stack .big { font-size: 28px; font-weight: 800; }
+    #stack .lbl { font-size: 16px; font-weight: 600; margin-top: 2px; }
+    #stack .ctx { font-size: 14px; color: var(--muted); margin-top: 2px; }
+    #stack .foot { margin-top: 16px; font-size: 14px; font-weight: 700; color: var(--muted); }
+    #bar { flex-wrap: wrap; }
+    #bar h2 { flex-basis: 100%; }
+    #spdlabel { display: none; }
+    #player.chapters { flex-direction: column; }
+    #chap { width: auto; max-height: 40%; border-left: 0; border-top: 1px solid var(--line); }
+  }
 </style>
 </head>
 <body>
@@ -206,6 +245,7 @@
 <text x="1534" y="945" font-size="14" font-weight="400" fill="#56627F" text-anchor="start" letter-spacing="0">1,077 trained technicians, thru 12/2025</text>
 <text x="70" y="1020" font-size="15" font-weight="700" fill="#56627F" text-anchor="start" letter-spacing="0">Service Business Evolution</text>
 </svg></div>
+<div id="stack" aria-label="The eight-part training platform"></div>
 <div id="hint">Click a <b style="color:var(--accent)">DEMO</b> box to play it, or any box to spotlight it.
   <kbd>3</kbd> <kbd>5</kbd> <kbd>6</kbd> <kbd>8</kbd> open demos, <kbd>F</kbd> full screen, <kbd>H</kbd> hides this.</div>
 
@@ -514,6 +554,61 @@ document.addEventListener("keydown", e => {
   } else if (e.key.toLowerCase() === "h") document.getElementById("hint").classList.toggle("hidden");
   else if (e.key === "Escape") document.getElementById("stage").click();
 });
+
+/* Phone layout (MT-175): build the stacked column from the diagram itself, so the wording has one
+   source. Demo cards open the same player as the diagram's DEMO boxes. */
+(function buildStack() {
+  const svg = document.getElementById("diagram"), out = document.getElementById("stack");
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const joinLines = a => a.reduce((s, x) => !s ? x : s.endsWith("-") ? s + x : s + " " + x, "");
+  const texts = (root, size) => [...root.querySelectorAll("text")].filter(t => t.getAttribute("font-size") === size);
+  const top = [...svg.children].filter(n => n.tagName === "text");
+  const inRect = (r, list) => { const y = +r.getAttribute("y"), h = +r.getAttribute("height"), x = +r.getAttribute("x"), w = +r.getAttribute("width");
+    return list.filter(t => +t.getAttribute("y") > y && +t.getAttribute("y") < y + h && +t.getAttribute("x") > x && +t.getAttribute("x") < x + w); };
+
+  out.append(el("h1", null, texts(svg, "44")[0].textContent), el("p", "sub", texts(svg, "24")[0].textContent),
+             el("p", "tip", "Tap a DEMO card to play it."));
+
+  const stages = top.filter(t => t.getAttribute("font-size") === "16" && t.getAttribute("letter-spacing") === "1.2");
+  const boxes = [...svg.querySelectorAll(".box")];
+  stages.forEach(st => {
+    const color = st.getAttribute("fill");
+    const h = el("h2", null, st.textContent); h.style.color = color; out.append(h);
+    boxes.filter(g => g.querySelector("circle").getAttribute("fill") === color).forEach(g => {
+      const id = g.dataset.box, demo = g.classList.contains("demo") && DEMOS[id];
+      const card = el(demo ? "button" : "div", "card"); card.style.borderLeftColor = color;
+      if (demo) { card.type = "button"; card.addEventListener("click", () => openDemo(id)); }
+      const n = el("span", "num", id); n.style.background = color; n.setAttribute("aria-hidden", "true");
+      const body = el("div");
+      body.append(el("div", "ttl", joinLines(texts(g, "20").map(t => t.textContent))),
+                  el("div", "dsc", joinLines(texts(g, "15").map(t => t.textContent))));
+      if (demo) body.append(el("span", "pill", "\u25B6  DEMO"));
+      card.append(n, body); out.append(card);
+    });
+  });
+  const loop = top.find(t => t.textContent.startsWith("CLOSED LOOP"));
+  if (loop) out.append(el("p", "loop", "\u21BB " + loop.textContent.replace(/\s+\u00B7\s+/, ": ")));
+
+  const ext = top.find(t => t.textContent === "EXTEND");
+  if (ext) {
+    const h = el("h2", null, "EXTEND"); h.style.color = ext.getAttribute("fill"); out.append(h);
+    const extText = top.filter(t => t.getAttribute("font-size") === "16" && t.getAttribute("font-weight") === "600");
+    [...svg.querySelectorAll('rect[stroke-dasharray]')].forEach(r => out.append(el("div", "ext", joinLines(inRect(r, extText).map(t => t.textContent)))));
+  }
+
+  const refHead = top.find(t => t.textContent === "REFERENCE OUTCOMES");
+  if (refHead) {
+    const h = el("h2", null, refHead.textContent); h.style.color = refHead.getAttribute("fill"); out.append(h);
+    const note = top.find(t => t !== refHead && t.getAttribute("y") === refHead.getAttribute("y"));
+    if (note) out.append(el("p", "ref", note.textContent));
+    [...svg.querySelectorAll('rect[width="340"]')].forEach(r => {
+      const inside = inRect(r, top), pick = sz => (inside.find(t => t.getAttribute("font-size") === sz) || {}).textContent || "";
+      const c = el("div", "out"); c.append(el("div", "big", pick("38")), el("div", "lbl", pick("17")), el("div", "ctx", pick("14"))); out.append(c);
+    });
+    const foot = top.find(t => +t.getAttribute("y") > 980);
+    if (foot) out.append(el("p", "foot", foot.textContent));
+  }
+})();
 </script>
 </body>
 </html>
