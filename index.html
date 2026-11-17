@@ -797,7 +797,9 @@ function openEmail(id) {
   document.getElementById("emStatus").textContent = "";
   document.getElementById("emTitle").textContent = em.kind === "recognition" ? "Send recognition" : "Email responsible party";
   m.hidden = false; document.body.classList.add("modal-open");
-  setTimeout(function () { document.getElementById("emTo").focus(); }, 0);
+  // On a touch screen, focusing a text field raises the on-screen keyboard over the draft, so focus the Close button there instead.
+  var touch = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+  setTimeout(function () { (touch ? m.querySelector(".modal-head [data-em=close]") : document.getElementById("emTo")).focus(); }, 0);
 }
 function closeEmail() {
   document.getElementById("emailModal").hidden = true; document.body.classList.remove("modal-open");
