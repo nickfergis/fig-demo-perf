@@ -1,0 +1,116 @@
+# Branch hygiene (MT-115, R-8 / R-10 stopgap).
+# Admin-free substitute for the repo setting "Automatically delete head branches",
+# which nobody without admin rights can turn on.
+#
+# 1. When a pull request is merged, its head branch is deleted.
+# 2. A sweep deletes every other branch that is fully merged: 0 commits ahead of
+#    the default branch and no open pull request.
+# 3. (MT-199, 2026-11-21) It also deletes a branch that is "ahead" only on paper:
+#    merging it into the default branch would change nothing, because its content
+#    already reached main another way (squash merge, cherry-pick, a direct-to-main
+#    copy). Test: `git merge-tree --write-tree main branch` yields main's own tree.
+#    A branch whose merge would change main, or would conflict, is always KEPT. It runs every time main changes
+#    (the moment a merged branch would start to show as "behind"), daily as a
+#    backstop, and on demand.
+#
+# Safety: a branch is only ever deleted when it is 0 ahead of the default branch,
+# so no commit is lost; any deleted branch can be restored from its tip commit
+# (the run log prints it) or with the Restore button on its pull request.
+name: Branch hygiene
+
+on:
+  pull_request_target:
+    types: [closed]
+  push:
+    branches: [main]   # sweep whenever main changes (Nick, 2026-10-15)
+  schedule:
+    - cron: "17 10 * * *"   # daily, about 3am Pacific
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List what would be deleted, delete nothing"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: branch-hygiene
+  cancel-in-progress: false
+
+jobs:
+  hygiene:
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { data: repoInfo } = await github.rest.repos.get({ owner, repo });
+            const base = repoInfo.default_branch;
+            const dryRun = context.eventName === "workflow_dispatch" && String(context.payload.inputs.dry_run) === "true";
+
+            // Returns a reason to keep the branch, or null if it is safe to delete.
+            async function keepReason(branch) {
+              if (branch === base) return "default branch";
+              const { data: cmp } = await github.rest.repos.compareCommitsWithBasehead({
+                owner, repo, basehead: `${base}...${branch}`, per_page: 1,
+              });
+              if (cmp.ahead_by > 0) {
+                // Ahead on paper. Delete only if merging it into the default branch
+                // would change nothing (its content is already on main).
+                try {
+                  await exec.exec("git", ["fetch", "-q", "origin", `+refs/heads/${branch}:refs/remotes/origin/${branch}`]);
+                  const mt = await exec.getExecOutput("git", ["merge-tree", "--write-tree", `origin/${base}`, `origin/${branch}`], { ignoreReturnCode: true, silent: true });
+                  const baseTree = (await exec.getExecOutput("git", ["rev-parse", `origin/${base}^{tree}`], { silent: true })).stdout.trim();
+                  const mergedTree = mt.stdout.split("\n")[0].trim();
+                  if (mt.exitCode !== 0) return `${cmp.ahead_by} ahead of ${base}; merge would conflict (review by hand)`;
+                  if (mergedTree !== baseTree) return `${cmp.ahead_by} ahead of ${base}; holds unmerged changes`;
+                } catch (e) {
+                  return `${cmp.ahead_by} ahead of ${base}; content check failed (${e.message})`;
+                }
+                // fall through: content already on main
+              }
+              const { data: open } = await github.rest.pulls.list({
+                owner, repo, state: "open", head: `${owner}:${branch}`, per_page: 1,
+              });
+              if (open.length > 0) return `open PR #${open[0].number}`;
+              return null;
+            }
+
+            async function remove(branch, sha) {
+              if (dryRun) { core.info(`WOULD DELETE ${branch} (tip ${sha})`); return; }
+              await github.rest.git.deleteRef({ owner, repo, ref: `heads/${branch}` });
+              core.info(`DELETED ${branch} (tip ${sha})`);
+            }
+
+            let branches;
+            if (context.eventName === "pull_request_target") {
+              const pr = context.payload.pull_request;
+              if (pr.head.repo === null || pr.head.repo.full_name !== `${owner}/${repo}`) {
+                core.info("Head branch is in a fork; nothing to delete here.");
+                return;
+              }
+              branches = [{ name: pr.head.ref, commit: { sha: pr.head.sha } }];
+            } else {
+              branches = await github.paginate(github.rest.repos.listBranches, { owner, repo, per_page: 100 });
+            }
+
+            const kept = [];
+            for (const b of branches) {
+              try {
+                const reason = await keepReason(b.name);
+                if (reason) { kept.push(`${b.name}: ${reason}`); continue; }
+                await remove(b.name, b.commit.sha);
+              } catch (e) {
+                if (e.status === 404 || e.status === 422) { core.info(`${b.name}: already gone`); continue; }
+                core.warning(`${b.name}: ${e.message}`);
+              }
+            }
+            if (kept.length) core.info("Kept:\n  " + kept.join("\n  "));
